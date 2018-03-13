@@ -23,88 +23,87 @@ contract PresaleContract is WithdrawContract {
     uint constant THIRD_PRESALE_PRICE = 16666;
     uint constant THIRD_PRESALE_AMOUNT = 166000000;
 
-    uint constant MINIMUM_TOKEN_VALUE_MULTIPLIER = 10**18;
+    uint constant EXTRA_DIGITS_MULTIPLIER = 10**18;
                                 
     uint constant MINIMUM_PAYMENT_VALUE = 0.01 ether;//100 ether;
 
-    uint[] prices;
-    uint[] amounts; 
+    uint[] amountBoughtInOneEth;
+    uint[] amountsLeft; 
     
     uint totalRaisedEth = 0;
     uint soldTokensAmount = 0;
     address public mainVallet;
     function PresaleContract() public {
         mainVallet = owner;
-        prices.push(FIRST_PRESALE_PRICE);
-        prices.push(SECOND_PRESALE_PRICE);
-        prices.push(THIRD_PRESALE_PRICE);
+        amountBoughtInOneEth.push(FIRST_PRESALE_PRICE);
+        amountBoughtInOneEth.push(SECOND_PRESALE_PRICE);
+        amountBoughtInOneEth.push(THIRD_PRESALE_PRICE);
         
-        amounts.push(FIRST_PRESALE_AMOUNT * MINIMUM_TOKEN_VALUE_MULTIPLIER);
-        amounts.push(SECOND_PRESALE_AMOUNT * MINIMUM_TOKEN_VALUE_MULTIPLIER);
-        amounts.push(THIRD_PRESALE_AMOUNT * MINIMUM_TOKEN_VALUE_MULTIPLIER);
+        amountsLeft.push(FIRST_PRESALE_AMOUNT * EXTRA_DIGITS_MULTIPLIER);
+        amountsLeft.push(SECOND_PRESALE_AMOUNT * EXTRA_DIGITS_MULTIPLIER);
+        amountsLeft.push(THIRD_PRESALE_AMOUNT * EXTRA_DIGITS_MULTIPLIER);
     }
     
     mapping (address => Balance) usersBalance;
     Transaction[] transactions;
     
-    function buyTokens() public payable {
+    function () external payable {
         require(msg.value >= MINIMUM_PAYMENT_VALUE);
-        uint deposit = msg.value;
+        uint totalDeposit = msg.value;
         
-        uint8 index = 0;
-        uint profit = 0;
+        uint8 stage = 0;
+        uint currentInvestment = 0;
         
         uint totalTokens = 0;
         
-        while (deposit > 0 && index < 3) {
-            uint ethers = 0;
-            uint maxAmount = deposit * MINIMUM_TOKEN_VALUE_MULTIPLIER * prices[index] / 1 ether;
-            if (amounts[index] >= maxAmount) {
-                amounts[index] -= maxAmount;
-                ethers = deposit;
-                deposit = 0;
+        while (totalDeposit > 0 && stage < 3) {
+            uint currentStageDeposit = 0;
+            
+            uint maxTokensAmountForCurrentStage = totalDeposit * amountBoughtInOneEth[stage];
+            //checking free tokens amount for current stage
+            if (amountsLeft[stage] >= maxTokensAmountForCurrentStage) {
+                amountsLeft[stage] -= maxTokensAmountForCurrentStage;
+                currentStageDeposit = totalDeposit;
+                totalDeposit = 0;
             } else {
-                maxAmount = amounts[index];
-                amounts[index] = 0;
-                ethers = maxAmount * 1 ether / MINIMUM_TOKEN_VALUE_MULTIPLIER / prices[index];
-                deposit -= ethers;
+                maxTokensAmountForCurrentStage = amountsLeft[stage];
+                amountsLeft[stage] = 0;
+                currentStageDeposit = maxTokensAmountForCurrentStage / amountBoughtInOneEth[stage];
+                totalDeposit -= currentStageDeposit;
                 
             }
             //save transaction
-            _addTransaction(msg.sender, ethers, prices[index], maxAmount);
+            _addTransaction(msg.sender, currentStageDeposit, amountBoughtInOneEth[stage], maxTokensAmountForCurrentStage);
             //calculations
-            totalTokens += maxAmount;
-            profit += ethers;
+            totalTokens += maxTokensAmountForCurrentStage;
+            currentInvestment += currentStageDeposit;
             //
-            index++;
+            stage++;
         }
         
-        _updateData(msg.sender, profit, totalTokens);
+        _updateUserBalance(msg.sender, currentInvestment, totalTokens);
         //return money
-        if (deposit > 0) {
-            withdraw(msg.sender, deposit);
+        if (totalDeposit > 0) {
+            withdraw(msg.sender, totalDeposit);
         }
         //auto-transfer to our wallet
-        if (profit > 0) {
-            withdraw(mainVallet, profit);
-            // mainVallet.transfer(profit);
+        if (currentInvestment > 0) {
+            withdraw(mainVallet, currentInvestment);
         }
     }
-    function _addTransaction(address _buyer, uint _ethers, uint _price, uint _amount) private {
-        Transaction memory transaction = Transaction(_buyer, _ethers, _price, _amount);
+    function _addTransaction(address _buyer, uint _currentStageDeposit, uint _price, uint _amount) private {
+        Transaction memory transaction = Transaction(_buyer, _currentStageDeposit, _price, _amount);
         transactions.push(transaction);
     }
-    function _updateData(address _buyer, uint _profit, uint _totalTokens) private {
-        Balance storage balan
-        ce = usersBalance[_buyer];
+    function _updateUserBalance(address _buyer, uint _currentInvestment, uint _totalTokens) private {
+        Balance storage balance = usersBalance[_buyer];
         soldTokensAmount += _totalTokens;
-        totalRaisedEth += _profit;
-        balance.ethers += _profit;
+        totalRaisedEth += _currentInvestment;
+        balance.ethers += _currentInvestment;
         balance.tokens += _totalTokens;
-        totalRaisedEth += _profit;
     }
-    function getMyBalans() public view returns(uint) {
-        return usersBalance[msg.sender].tokens;
+    function getUserBalans(address _user) public view returns(uint) {
+        return usersBalance[_user].tokens;
     }
     function changeBalance(address _user, uint _balans) public onlyOwner() {
         Balance storage balance = usersBalance[_user];
