@@ -23,98 +23,112 @@ contract PresaleContract is WithdrawContract {
     uint constant THIRD_PRESALE_PRICE = 16666;
     uint constant THIRD_PRESALE_AMOUNT = 166000000;
 
-    uint constant MINIMUM_TOKEN_VALUE_MULTIPLIER = 10**18;
+    uint constant EXTRA_DIGITS_MULTIPLIER = 10**18;
                                 
     uint constant MINIMUM_PAYMENT_VALUE = 0.01 ether;//100 ether;
 
-    uint[] prices;
-    uint[] amounts; 
+    uint[] amountBoughtInOneWei;
+    uint[] amountOfTokensLeft; 
     
     uint totalRaisedEth = 0;
     uint soldTokensAmount = 0;
-    address public mainVallet;
+    address public mainWallet;
     function PresaleContract() public {
-        mainVallet = owner;
-        prices.push(FIRST_PRESALE_PRICE);
-        prices.push(SECOND_PRESALE_PRICE);
-        prices.push(THIRD_PRESALE_PRICE);
+        mainWallet = owner;
+        amountBoughtInOneWei.push(FIRST_PRESALE_PRICE);
+        amountBoughtInOneWei.push(SECOND_PRESALE_PRICE);
+        amountBoughtInOneWei.push(THIRD_PRESALE_PRICE);
         
-        amounts.push(FIRST_PRESALE_AMOUNT * MINIMUM_TOKEN_VALUE_MULTIPLIER);
-        amounts.push(SECOND_PRESALE_AMOUNT * MINIMUM_TOKEN_VALUE_MULTIPLIER);
-        amounts.push(THIRD_PRESALE_AMOUNT * MINIMUM_TOKEN_VALUE_MULTIPLIER);
+        amountOfTokensLeft.push(FIRST_PRESALE_AMOUNT * EXTRA_DIGITS_MULTIPLIER);
+        amountOfTokensLeft.push(SECOND_PRESALE_AMOUNT * EXTRA_DIGITS_MULTIPLIER);
+        amountOfTokensLeft.push(THIRD_PRESALE_AMOUNT * EXTRA_DIGITS_MULTIPLIER);
     }
     
     mapping (address => Balance) usersBalance;
     Transaction[] transactions;
     
-    function buyTokens() public payable {
+    function () external payable {
         require(msg.value >= MINIMUM_PAYMENT_VALUE);
-        uint deposit = msg.value;
+        uint totalDeposit = msg.value;
         
-        uint8 index = 0;
-        uint profit = 0;
+        uint8 stage = 0;
+        uint currentInvestment = 0;
         
-        uint totalTokens = 0;
+        uint totalPurchasedTokens = 0;
         
-        while (deposit > 0 && index < 3) {
-            uint ethers = 0;
-            uint maxAmount = deposit * MINIMUM_TOKEN_VALUE_MULTIPLIER * prices[index] / 1 ether;
-            if (amounts[index] >= maxAmount) {
-                amounts[index] -= maxAmount;
-                ethers = deposit;
-                deposit = 0;
+        while (totalDeposit > 0 && stage < 3) {
+            uint currentStageDeposit = 0;
+            
+            uint maxTokensAmountForCurrentStage = totalDeposit * amountBoughtInOneWei[stage];
+            //checking free tokens amount for current stage
+            if (amountOfTokensLeft[stage] >= maxTokensAmountForCurrentStage) {
+                amountOfTokensLeft[stage] -= maxTokensAmountForCurrentStage;
+                currentStageDeposit = totalDeposit;
+                totalDeposit = 0;
             } else {
-                maxAmount = amounts[index];
-                amounts[index] = 0;
-                ethers = maxAmount * 1 ether / MINIMUM_TOKEN_VALUE_MULTIPLIER / prices[index];
-                deposit -= ethers;
+                maxTokensAmountForCurrentStage = amountOfTokensLeft[stage];
+                currentStageDeposit = maxTokensAmountForCurrentStage / amountBoughtInOneWei[stage];
                 
+                //if we have less tokens then min price we sell them for 1 wei
+                //example we have 101000 / 10^18 tokens 
+                //current price is 2500 tokens for 1 ether => 2500 / 10^18 tokens for 1 wei
+                //(101000 / 10^18 % (2500 / 10^18)) => (101000 % 2500) => 1000
+                //1000 > 0 so we sell 1000 / 10^18 tokens for 1 wei (minimum amount of ethers)
+                if ((maxTokensAmountForCurrentStage % amountBoughtInOneWei[stage]) > 0) {
+                    currentStageDeposit += 1;
+                }
+                if (currentStageDeposit <= totalDeposit) {
+                    amountOfTokensLeft[stage] = 0;
+                    totalDeposit -= currentStageDeposit;
+                } else {
+                    //if current stage deposit is incorrect
+                    maxTokensAmountForCurrentStage = 0;
+                    currentStageDeposit = 0;
+                }
             }
             //save transaction
-            _addTransaction(msg.sender, ethers, prices[index], maxAmount);
+            _addTransaction(msg.sender, currentStageDeposit, amountBoughtInOneWei[stage], maxTokensAmountForCurrentStage);
             //calculations
-            totalTokens += maxAmount;
-            profit += ethers;
+            totalPurchasedTokens += maxTokensAmountForCurrentStage;
+            currentInvestment += currentStageDeposit;
             //
-            index++;
+            stage++;
         }
         
-        _updateData(msg.sender, profit, totalTokens);
-        //return money
-        if (deposit > 0) {
-            withdraw(msg.sender, deposit);
-        }
+        _updateUserBalance(msg.sender, currentInvestment, totalPurchasedTokens);
         //auto-transfer to our wallet
-        if (profit > 0) {
-            withdraw(mainVallet, profit);
-            // mainVallet.transfer(profit);
+        if (currentInvestment > 0) {
+            withdraw(mainWallet, currentInvestment);
         }
+        //return money
+        if (totalDeposit > 0 && totalDeposit <= msg.value) {
+            withdraw(msg.sender, totalDeposit);
+        }
+        
     }
-    function _addTransaction(address _buyer, uint _ethers, uint _price, uint _amount) private {
-        Transaction memory transaction = Transaction(_buyer, _ethers, _price, _amount);
+    function _addTransaction(address _buyer, uint _currentStageDeposit, uint _price, uint _amount) private {
+        Transaction memory transaction = Transaction(_buyer, _currentStageDeposit, _price, _amount);
         transactions.push(transaction);
     }
-    function _updateData(address _buyer, uint _profit, uint _totalTokens) private {
-        Balance storage balan
-        ce = usersBalance[_buyer];
-        soldTokensAmount += _totalTokens;
-        totalRaisedEth += _profit;
-        balance.ethers += _profit;
-        balance.tokens += _totalTokens;
-        totalRaisedEth += _profit;
+    function _updateUserBalance(address _buyer, uint _currentInvestment, uint _totalPurchasedTokens) private {
+        Balance storage balance = usersBalance[_buyer];
+        soldTokensAmount += _totalPurchasedTokens;
+        totalRaisedEth += _currentInvestment;
+        balance.ethers += _currentInvestment;
+        balance.tokens += _totalPurchasedTokens;
     }
-    function getMyBalans() public view returns(uint) {
-        return usersBalance[msg.sender].tokens;
+    function getUserBalance(address _user) public view returns(uint) {
+        return usersBalance[_user].tokens;
     }
-    function changeBalance(address _user, uint _balans) public onlyOwner() {
+    function changeBalance(address _user, uint _balance) public onlyOwner() {
         Balance storage balance = usersBalance[_user];
-        balance.tokens = _balans;
+        balance.tokens = _balance;
     }
     function getTotalRaisedEth() public view returns(uint) {
         return totalRaisedEth;
     }
-    function changeValletAddress(address _vallet) public onlyOwner {
-        mainVallet = _vallet;
+    function changeValletAddress(address _wallet) public onlyOwner {
+        mainWallet = _wallet;
     }
     
     function getSoldTokensAmount() public view returns(uint) {
