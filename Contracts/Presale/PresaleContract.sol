@@ -25,7 +25,7 @@ contract PresaleContract is WithdrawContract {
 
     uint constant EXTRA_DIGITS_MULTIPLIER = 10**18;
                                 
-    uint constant MINIMUM_PAYMENT_VALUE = 0.01 ether;//100 ether;
+    uint constant MINIMUM_PAYMENT_VALUE = 100 ether;
 
     uint[] amountBoughtInOneWei;
     uint[] amountOfTokensLeft; 
