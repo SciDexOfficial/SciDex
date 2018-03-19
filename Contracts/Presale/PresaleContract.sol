@@ -147,18 +147,13 @@ contract PresaleContract is WithdrawContract {
             investors.push(_user);
         }
         //if new balance should be less than was before
+        //it's mean we take tokens from user balance
         if (balance.tokens > _newBalance) {
-            //example: change from 2000 to 500 
-            //soldTokensAmount was 10 000
-            //soldTokensAmount -= 2000 - 500 => soldTokensAmount -= 1500 
-            //soldTokensAmount == 8500
-            
+            //remove tokens from the total sold tokens amount
             soldTokensAmount -= (balance.tokens - _newBalance);
         } else {
-            //example: change from 2000 to 5500 
-            //soldTokensAmount was 10 000
-            //soldTokensAmount += 5500 - 2000 => soldTokensAmount += 3500 
-            //soldTokensAmount == 13500
+            //if we add tokens to the user's balance 
+            //add new tokens to the total sold tokens amount
             soldTokensAmount += (_newBalance - balance.tokens);
         }
         //update user's balance
