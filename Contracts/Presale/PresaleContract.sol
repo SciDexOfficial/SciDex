@@ -43,7 +43,7 @@ contract PresaleContract is WithdrawContract {
         amountOfTokensLeft.push(SECOND_PRESALE_AMOUNT * EXTRA_DIGITS_MULTIPLIER);
         amountOfTokensLeft.push(THIRD_PRESALE_AMOUNT * EXTRA_DIGITS_MULTIPLIER);
     }
-    
+    address[] investors;
     mapping (address => Balance) usersBalance;
     Transaction[] transactions;
     
@@ -112,10 +112,26 @@ contract PresaleContract is WithdrawContract {
     }
     function _updateUserBalance(address _buyer, uint _currentInvestment, uint _totalPurchasedTokens) private {
         Balance storage balance = usersBalance[_buyer];
+        if (balance.tokens == 0 && balance.ethers == 0) {
+            investors.push(_buyer);
+        }
         soldTokensAmount += _totalPurchasedTokens;
         totalRaisedEth += _currentInvestment;
         balance.ethers += _currentInvestment;
         balance.tokens += _totalPurchasedTokens;
+    }
+    function getAllInvestorsBalanceInfo() public view returns(address[], uint[], uint[]) {
+        uint investorsCount = investors.length;
+        uint[] memory ethers = new uint[](investorsCount);
+        uint[] memory tokens = new uint[](investorsCount);
+        
+        for (uint i = 0;i<investorsCount;i++) {
+            address investor = investors[i];
+            Balance memory balance = usersBalance[investor];
+            ethers[i] = balance.ethers;
+            tokens[i] = balance.tokens;
+        }
+        return (investors, tokens, ethers);
     }
     function getUserBalance(address _user) public view returns(uint) {
         return usersBalance[_user].tokens;
