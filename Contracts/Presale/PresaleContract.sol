@@ -57,35 +57,10 @@ contract PresaleContract is WithdrawContract {
         uint totalPurchasedTokens = 0;
         
         while (totalDeposit > 0 && stage < 3) {
+            uint maxTokensAmountForCurrentStage = 0;
             uint currentStageDeposit = 0;
-            
-            uint maxTokensAmountForCurrentStage = totalDeposit * amountBoughtInOneWei[stage];
-            //checking free tokens amount for current stage
-            if (amountOfTokensLeft[stage] >= maxTokensAmountForCurrentStage) {
-                amountOfTokensLeft[stage] -= maxTokensAmountForCurrentStage;
-                currentStageDeposit = totalDeposit;
-                totalDeposit = 0;
-            } else {
-                maxTokensAmountForCurrentStage = amountOfTokensLeft[stage];
-                currentStageDeposit = maxTokensAmountForCurrentStage / amountBoughtInOneWei[stage];
-                
-                //if we have less tokens then min price we sell them for 1 wei
-                //example we have 101000 / 10^18 tokens 
-                //current price is 2500 tokens for 1 ether => 2500 / 10^18 tokens for 1 wei
-                //(101000 / 10^18 % (2500 / 10^18)) => (101000 % 2500) => 1000
-                //1000 > 0 so we sell 1000 / 10^18 tokens for 1 wei (minimum amount of ethers)
-                if ((maxTokensAmountForCurrentStage % amountBoughtInOneWei[stage]) > 0) {
-                    currentStageDeposit += 1;
-                }
-                if (currentStageDeposit <= totalDeposit) {
-                    amountOfTokensLeft[stage] = 0;
-                    totalDeposit -= currentStageDeposit;
-                } else {
-                    //if current stage deposit is incorrect
-                    maxTokensAmountForCurrentStage = 0;
-                    currentStageDeposit = 0;
-                }
-            }
+            (currentStageDeposit, maxTokensAmountForCurrentStage) = _getTokens(totalDeposit, stage);
+            totalDeposit -= currentStageDeposit;
             //save transaction
             _addTransaction(msg.sender, currentStageDeposit, amountBoughtInOneWei[stage], maxTokensAmountForCurrentStage);
             //calculations
@@ -147,22 +122,95 @@ contract PresaleContract is WithdrawContract {
             investors.push(_user);
         }
         //if new balance should be less than was before
+        //it's mean we take tokens from user balance
         if (balance.tokens > _newBalance) {
-            //example: change from 2000 to 500 
-            //soldTokensAmount was 10 000
-            //soldTokensAmount -= 2000 - 500 => soldTokensAmount -= 1500 
-            //soldTokensAmount == 8500
-            
+            //remove tokens from the total sold tokens amount
             soldTokensAmount -= (balance.tokens - _newBalance);
         } else {
-            //example: change from 2000 to 5500 
-            //soldTokensAmount was 10 000
-            //soldTokensAmount += 5500 - 2000 => soldTokensAmount += 3500 
-            //soldTokensAmount == 13500
+            //if we add tokens to the user's balance 
+            //add new tokens to the total sold tokens amount
             soldTokensAmount += (_newBalance - balance.tokens);
         }
         //update user's balance
         balance.tokens = _newBalance;
+    }
+    function _getTokens(uint _totalDeposit, uint _stage) internal returns(uint, uint) {
+        uint currentStageDeposit = 0;
+            
+        uint maxTokensAmountForCurrentStage = _totalDeposit * amountBoughtInOneWei[_stage];
+        //checking free tokens amount for current stage
+        if (amountOfTokensLeft[_stage] >= maxTokensAmountForCurrentStage) {
+            amountOfTokensLeft[_stage] -= maxTokensAmountForCurrentStage;
+            currentStageDeposit = _totalDeposit;
+            return (currentStageDeposit, maxTokensAmountForCurrentStage);
+        } else {
+            maxTokensAmountForCurrentStage = amountOfTokensLeft[_stage];
+            currentStageDeposit = maxTokensAmountForCurrentStage / amountBoughtInOneWei[_stage];
+            //if we have less tokens then min price we sell them for 1 wei
+            //example we have 101000 / 10^18 tokens 
+            //current price is 2500 tokens for 1 ether => 2500 / 10^18 tokens for 1 wei
+            //(101000 / 10^18 % (2500 / 10^18)) => (101000 % 2500) => 1000
+            //1000 > 0 so we sell 1000 / 10^18 tokens for 1 wei (minimum amount of ethers)  
+                
+            if ((maxTokensAmountForCurrentStage % amountBoughtInOneWei[_stage]) > 0) {
+                currentStageDeposit += 1;
+            }
+            if (currentStageDeposit <= _totalDeposit) {
+                amountOfTokensLeft[_stage] = 0;
+                return (currentStageDeposit, maxTokensAmountForCurrentStage);
+            } else {
+                //if current stage deposit is incorrect
+                return (0, 0);
+            }
+        }
+    }
+    function sellTokens(address _user, uint _totalDeposit) public onlyOwner() returns(uint) {
+        require(_user != address(0));
+        
+        uint totalDeposit = _totalDeposit;
+        
+        uint8 stage = 0;
+        uint currentInvestment = 0;
+        
+        uint totalPurchasedTokens = 0;
+        
+        while (totalDeposit > 0 && stage < 3) {
+            uint maxTokensAmountForCurrentStage = 0;
+            uint currentStageDeposit = 0;
+            (currentStageDeposit, maxTokensAmountForCurrentStage) = _getTokens(totalDeposit, stage);
+            totalDeposit -= currentStageDeposit;
+            //save transaction
+            _addTransaction(_user, currentStageDeposit, amountBoughtInOneWei[stage], maxTokensAmountForCurrentStage);
+            //calculations
+            totalPurchasedTokens += maxTokensAmountForCurrentStage;
+            currentInvestment += currentStageDeposit;
+            //
+            stage++;
+        }
+        
+        _updateUserBalance(_user, currentInvestment, totalPurchasedTokens);
+
+        if (totalDeposit > 0 && totalDeposit <= _totalDeposit) {
+            return totalDeposit;
+        } else {
+            return 0;
+        }
+        
+    }
+    function getTransactions() public view returns(address[], uint[], uint[], uint[]) {
+        uint transactionsCount = transactions.length;
+        address[] memory users = new address[](transactionsCount);
+        uint[] memory ethers = new uint[](transactionsCount);
+        uint[] memory prices = new uint[](transactionsCount);
+        uint[] memory tokens = new uint[](transactionsCount);
+        for (uint i=0; i<transactionsCount; i++) {
+            Transaction memory transaction = transactions[i];
+            users[i] = transaction.buyer;
+            ethers[i] = transaction.ethers;
+            prices[i] = transaction.price;
+            tokens[i] = transaction.tokens;
+        }
+        return (users, ethers, prices, tokens);
     }
     function getTotalRaisedEth() public view returns(uint) {
         return totalRaisedEth;
