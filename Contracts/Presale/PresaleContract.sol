@@ -1,8 +1,11 @@
 pragma solidity ^0.4.18;
 import "./Withdraw.sol";
+import "./SafeMath.sol";
+
+
 
 contract PresaleContract is WithdrawContract {
-
+    using SafeMath for uint256;
     struct Transaction {
         address buyer;
         uint ethers;
@@ -60,12 +63,12 @@ contract PresaleContract is WithdrawContract {
             uint maxTokensAmountForCurrentStage = 0;
             uint currentStageDeposit = 0;
             (currentStageDeposit, maxTokensAmountForCurrentStage) = _getTokens(totalDeposit, stage);
-            totalDeposit -= currentStageDeposit;
+            totalDeposit = totalDeposit.sub(currentStageDeposit);
             //save transaction
             _addTransaction(msg.sender, currentStageDeposit, amountBoughtInOneWei[stage], maxTokensAmountForCurrentStage);
             //calculations
-            totalPurchasedTokens += maxTokensAmountForCurrentStage;
-            currentInvestment += currentStageDeposit;
+            totalPurchasedTokens = totalPurchasedTokens.add(maxTokensAmountForCurrentStage);
+            currentInvestment = currentInvestment.add(currentStageDeposit);
             //
             stage++;
         }
@@ -90,10 +93,10 @@ contract PresaleContract is WithdrawContract {
         if (balance.tokens == 0 && balance.ethers == 0) {
             investors.push(_buyer);
         }
-        soldTokensAmount += _totalPurchasedTokens;
-        totalRaisedEth += _currentInvestment;
-        balance.ethers += _currentInvestment;
-        balance.tokens += _totalPurchasedTokens;
+        soldTokensAmount = soldTokensAmount.add(_totalPurchasedTokens);
+        totalRaisedEth = totalRaisedEth.add(_currentInvestment);
+        balance.ethers = balance.ethers.add(_currentInvestment);
+        balance.tokens = balance.tokens.add(_totalPurchasedTokens);
     }
     function getAllInvestorsBalanceInfo() public view returns(address[], uint[], uint[]) {
         uint investorsCount = investors.length;
@@ -125,11 +128,11 @@ contract PresaleContract is WithdrawContract {
         //it's mean we take tokens from user balance
         if (balance.tokens > _newBalance) {
             //remove tokens from the total sold tokens amount
-            soldTokensAmount -= (balance.tokens - _newBalance);
+            soldTokensAmount = soldTokensAmount.sub(balance.tokens.sub(_newBalance));
         } else {
             //if we add tokens to the user's balance 
             //add new tokens to the total sold tokens amount
-            soldTokensAmount += (_newBalance - balance.tokens);
+            soldTokensAmount = soldTokensAmount.add(_newBalance.sub(balance.tokens));
         }
         //update user's balance
         balance.tokens = _newBalance;
@@ -137,15 +140,15 @@ contract PresaleContract is WithdrawContract {
     function _getTokens(uint _totalDeposit, uint _stage) internal returns(uint, uint) {
         uint currentStageDeposit = 0;
             
-        uint maxTokensAmountForCurrentStage = _totalDeposit * amountBoughtInOneWei[_stage];
+        uint maxTokensAmountForCurrentStage = _totalDeposit.mul(amountBoughtInOneWei[_stage]);
         //checking free tokens amount for current stage
         if (amountOfTokensLeft[_stage] >= maxTokensAmountForCurrentStage) {
-            amountOfTokensLeft[_stage] -= maxTokensAmountForCurrentStage;
+            amountOfTokensLeft[_stage] = amountOfTokensLeft[_stage].sub(maxTokensAmountForCurrentStage);
             currentStageDeposit = _totalDeposit;
             return (currentStageDeposit, maxTokensAmountForCurrentStage);
         } else {
             maxTokensAmountForCurrentStage = amountOfTokensLeft[_stage];
-            currentStageDeposit = maxTokensAmountForCurrentStage / amountBoughtInOneWei[_stage];
+            currentStageDeposit = maxTokensAmountForCurrentStage.div(amountBoughtInOneWei[_stage]);
             //if we have less tokens then min price we sell them for 1 wei
             //example we have 101000 / 10^18 tokens 
             //current price is 2500 tokens for 1 ether => 2500 / 10^18 tokens for 1 wei
@@ -153,7 +156,7 @@ contract PresaleContract is WithdrawContract {
             //1000 > 0 so we sell 1000 / 10^18 tokens for 1 wei (minimum amount of ethers)  
                 
             if ((maxTokensAmountForCurrentStage % amountBoughtInOneWei[_stage]) > 0) {
-                currentStageDeposit += 1;
+                currentStageDeposit = currentStageDeposit.add(1);
             }
             if (currentStageDeposit <= _totalDeposit) {
                 amountOfTokensLeft[_stage] = 0;
@@ -178,12 +181,12 @@ contract PresaleContract is WithdrawContract {
             uint maxTokensAmountForCurrentStage = 0;
             uint currentStageDeposit = 0;
             (currentStageDeposit, maxTokensAmountForCurrentStage) = _getTokens(totalDeposit, stage);
-            totalDeposit -= currentStageDeposit;
+            totalDeposit = totalDeposit.sub(currentStageDeposit);
             //save transaction
             _addTransaction(_user, currentStageDeposit, amountBoughtInOneWei[stage], maxTokensAmountForCurrentStage);
             //calculations
-            totalPurchasedTokens += maxTokensAmountForCurrentStage;
-            currentInvestment += currentStageDeposit;
+            totalPurchasedTokens = totalPurchasedTokens.add(maxTokensAmountForCurrentStage);
+            currentInvestment = currentInvestment.add(currentStageDeposit);
             //
             stage++;
         }
