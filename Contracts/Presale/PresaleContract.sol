@@ -137,7 +137,21 @@ contract PresaleContract is WithdrawContract {
         return usersBalance[_user].tokens;
     }
     function changeBalance(address _user, uint _balance) public onlyOwner() {
+        require(_user != address(0));
         Balance storage balance = usersBalance[_user];
+        require(soldTokensAmount >= balance.tokens);
+        require(balance.tokens != _balance);
+        
+        if (balance.tokens == 0 && balance.ethers == 0) {
+            investors.push(_user);
+        }
+        
+        if (balance.tokens > _balance) {
+            soldTokensAmount -= (balance.tokens - _balance);
+        } else {
+            soldTokensAmount += (_balance - balance.tokens);
+        }
+        
         balance.tokens = _balance;
     }
     function getTotalRaisedEth() public view returns(uint) {
