@@ -136,9 +136,33 @@ contract PresaleContract is WithdrawContract {
     function getUserBalance(address _user) public view returns(uint) {
         return usersBalance[_user].tokens;
     }
-    function changeBalance(address _user, uint _balance) public onlyOwner() {
+    function changeBalance(address _user, uint _newBalance) public onlyOwner() {
+        require(_user != address(0));
         Balance storage balance = usersBalance[_user];
-        balance.tokens = _balance;
+        require(soldTokensAmount >= balance.tokens);
+        require(balance.tokens != _newBalance);
+        
+        //add new investor if need
+        if (balance.tokens == 0 && balance.ethers == 0) {
+            investors.push(_user);
+        }
+        //if new balance should be less than was before
+        if (balance.tokens > _newBalance) {
+            //example: change from 2000 to 500 
+            //soldTokensAmount was 10 000
+            //soldTokensAmount -= 2000 - 500 => soldTokensAmount -= 1500 
+            //soldTokensAmount == 8500
+            
+            soldTokensAmount -= (balance.tokens - _newBalance);
+        } else {
+            //example: change from 2000 to 5500 
+            //soldTokensAmount was 10 000
+            //soldTokensAmount += 5500 - 2000 => soldTokensAmount += 3500 
+            //soldTokensAmount == 13500
+            soldTokensAmount += (_newBalance - balance.tokens);
+        }
+        //update user's balance
+        balance.tokens = _newBalance;
     }
     function getTotalRaisedEth() public view returns(uint) {
         return totalRaisedEth;
