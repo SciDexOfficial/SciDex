@@ -218,7 +218,7 @@ contract PresaleContract is WithdrawContract {
     function getTotalRaisedEth() public view returns(uint) {
         return totalRaisedEth;
     }
-    function changeValletAddress(address _wallet) public onlyOwner {
+    function changeWalletAddress(address _wallet) public onlyOwner {
         mainWallet = _wallet;
     }
     
